@@ -5,27 +5,25 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          cache: true
 
       - name: Restore dependencies
-        run: dotnet restore RaceDay.Api.csproj
+        run: dotnet restore "RaceDay.Api.slnx"
 
-      - name: Build application
-        run: dotnet build RaceDay.Api.csproj --configuration Release --no-restore
+      - name: Build
+        run: dotnet build "RaceDay.Api.slnx" --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test RaceDay.Api.csproj --configuration Release --no-build --verbosity normal
+        run: |
+          dotnet test --no-build --verbosity normal
