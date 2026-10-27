@@ -36,6 +36,7 @@ public class ExceptionHandlingMiddleware
     {
         var (statusCode, title) = exception switch
         {
+            ForbiddenAccessException => (HttpStatusCode.Forbidden, "Forbidden"),
             UnauthorizedAccessException => (HttpStatusCode.Unauthorized, "Unauthorized"),
             InvalidOperationException => (HttpStatusCode.BadRequest, "Bad Request"),
             ArgumentException => (HttpStatusCode.BadRequest, "Validation Error"),
@@ -47,7 +48,10 @@ public class ExceptionHandlingMiddleware
         {
             Status = (int)statusCode,
             Title = title,
-            Detail = exception.Message,
+            // Never expose internal error details (stack info, SQL errors) for unexpected failures.
+            Detail = statusCode == HttpStatusCode.InternalServerError
+                ? "An unexpected error occurred. Please try again later."
+                : exception.Message,
             Instance = context.Request.Path
         };
 
