@@ -35,6 +35,10 @@ public class User
     [MaxLength(100)]
     public string? Province { get; set; }
 
+    /// Public URL of the profile picture stored in Azure Blob Storage.
+    [MaxLength(500)]
+    public string? ProfilePictureUrl { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation properties

@@ -33,6 +33,7 @@ public class RaceDayDbContext : DbContext
             entity.Property(u => u.PhoneNumber).HasMaxLength(20);
             entity.Property(u => u.City).HasMaxLength(100);
             entity.Property(u => u.Province).HasMaxLength(100);
+            entity.Property(u => u.ProfilePictureUrl).HasMaxLength(500);
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("GETDATE()");
 
             // CHECK: Gender IN ('Male', 'Female', 'Other')
@@ -82,6 +83,8 @@ public class RaceDayDbContext : DbContext
             entity.Property(e => e.City).IsRequired().HasMaxLength(100);
             entity.Property(e => e.Province).IsRequired().HasMaxLength(100);
             entity.Property(e => e.EventType).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Distance).HasColumnType("decimal(6,2)");
+            entity.Property(e => e.BannerImageUrl).HasMaxLength(500);
             entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("Draft");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETDATE()");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("GETDATE()");
@@ -98,6 +101,7 @@ public class RaceDayDbContext : DbContext
                     "EventType IN ('Running', 'Walking', 'Cycling')");
                 t.HasCheckConstraint("CK_Events_Status",
                     "Status IN ('Draft', 'Published', 'Completed', 'Cancelled')");
+                t.HasCheckConstraint("CK_Events_Distance", "Distance >= 0");
             });
         });
 
@@ -145,7 +149,7 @@ public class RaceDayDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
 
             entity.ToTable(t => t.HasCheckConstraint("CK_Enrolments_Status",
-                "Status IN ('Registered', 'Confirmed', 'Withdrawn', 'DNS')"));
+                "Status IN ('Pending', 'Registered', 'Confirmed', 'Withdrawn', 'DNS')"));
         });
 
         // Results

@@ -35,6 +35,13 @@ public class Event
     [Required, MaxLength(20)]
     public string EventType { get; set; } = string.Empty;
 
+    /// Main race distance in kilometres (individual categories may differ).
+    public decimal Distance { get; set; }
+
+    /// Public URL of the banner image stored in Azure Blob Storage.
+    [MaxLength(500)]
+    public string? BannerImageUrl { get; set; }
+
     [Required, MaxLength(20)]
     public string Status { get; set; } = "Draft";
 
