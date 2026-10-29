@@ -1,0 +1,103 @@
+@model MyEnrolmentsViewModel
+@{
+    ViewData["Title"] = "My Enrolments";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <span class="rd-hero-kicker mb-1">Athlete Race Schedule</span>
+        <h1 class="h2 mb-1">My Event Enrolments</h1>
+        <p class="text-muted small mb-0">Personal view of all events you have enrolled for, your assigned race bibs, and colour-coded enrolment status</p>
+    </div>
+    <a asp-controller="Events" asp-action="Index" class="btn btn-rd-primary">
+        + Browse More Events
+    </a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="rd-stat-card h-100">
+            <div class="rd-stat-label">Total Enrolments</div>
+            <div class="rd-stat-value">@Model.Enrolments.Count</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="rd-stat-card h-100" style="border-left-color: #16A34A;">
+            <div class="rd-stat-label">Confirmed Entries</div>
+            <div class="rd-stat-value">@Model.ConfirmedCount</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="rd-stat-card h-100" style="border-left-color: #D97706;">
+            <div class="rd-stat-label">Pending Confirmation</div>
+            <div class="rd-stat-value">@Model.PendingCount</div>
+        </div>
+    </div>
+</div>
+
+<div class="rd-card p-4">
+    @if (Model.Enrolments.Count == 0)
+    {
+        <div class="text-center py-5">
+            <h2 class="h5 mb-2">You Haven't Enrolled in Any Events Yet</h2>
+            <p class="text-muted small mb-3">Explore upcoming running, walking, and cycling events and select a category to get your official race bib.</p>
+            <a asp-controller="Events" asp-action="Index" class="btn btn-rd-primary">Explore Upcoming Events</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Bib Number</th>
+                        <th>Event</th>
+                        <th>Race Date &amp; Time</th>
+                        <th>Selected Category</th>
+                        <th>Entry Fee</th>
+                        <th>Enrolment Status</th>
+                        <th class="text-end">Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var enr in Model.Enrolments)
+                    {
+                        <tr>
+                            <td>
+                                <span class="rd-bib">@(enr.BibNumber ?? "TBA")</span>
+                            </td>
+                            <td>
+                                <div class="fw-bold">
+                                    <a asp-controller="Events" asp-action="Details" asp-route-id="@enr.EventId" class="text-decoration-none text-dark">
+                                        @enr.EventName
+                                    </a>
+                                </div>
+                                <div class="small text-muted">@enr.EventLocation &bull; @enr.EventCity</div>
+                            </td>
+                            <td class="small">
+                                <div class="fw-semibold">@enr.EventDate.ToString("ddd, dd MMM yyyy")</div>
+                                <div class="text-muted">@enr.EventStartTime.ToString("HH:mm")</div>
+                            </td>
+                            <td>
+                                <div class="fw-semibold">@enr.CategoryName</div>
+                                <div class="small text-muted">@enr.CategoryDistance.ToString("0.##") km</div>
+                            </td>
+                            <td class="fw-semibold">
+                                R @enr.EntryFee.ToString("0.00")
+                            </td>
+                            <td>
+                                <partial name="_StatusBadge" model="enr.Status" />
+                            </td>
+                            <td class="text-end">
+                                <a asp-controller="Events" asp-action="Details" asp-route-id="@enr.EventId" class="btn btn-sm btn-outline-dark">
+                                    View Event
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+

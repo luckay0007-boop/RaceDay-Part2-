@@ -1,0 +1,118 @@
+@model MyResultsViewModel
+@{
+    ViewData["Title"] = "My Race Results";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <span class="rd-hero-kicker mb-1">Official Timing History</span>
+        <h1 class="h2 mb-1">My Race Results</h1>
+        <p class="text-muted small mb-0">Your personal race history across all completed events, including finish times and finishing positions</p>
+    </div>
+    <a asp-controller="Participant" asp-action="Enrolments" class="btn btn-outline-dark">
+        View My Enrolments
+    </a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="rd-stat-card h-100">
+            <div class="rd-stat-label">Completed Races</div>
+            <div class="rd-stat-value">@Model.CompletedRacesCount</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="rd-stat-card h-100" style="border-left-color: #16A34A;">
+            <div class="rd-stat-label">Total Distance Finishes</div>
+            <div class="rd-stat-value">@Model.TotalKilometresCompleted.ToString("0.#") km</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="rd-stat-card h-100" style="border-left-color: #F59E0B;">
+            <div class="rd-stat-label">Top-3 Podium Finishes</div>
+            <div class="rd-stat-value">@Model.PodiumCount</div>
+        </div>
+    </div>
+</div>
+
+<div class="rd-card p-4">
+    @if (Model.Results.Count == 0)
+    {
+        <div class="text-center py-5">
+            <h2 class="h5 mb-2">No Official Results Recorded Yet</h2>
+            <p class="text-muted small mb-3">
+                Once an event concludes and the Organiser captures and publishes your finish time and finishing position, your results will appear here.
+            </p>
+            <a asp-controller="Events" asp-action="Index" class="btn btn-rd-primary">Explore Upcoming Races</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Event Name</th>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Bib #</th>
+                        <th>Recorded Finish Time</th>
+                        <th>Finishing Position</th>
+                        <th>Outcome</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var res in Model.Results)
+                    {
+                        <tr>
+                            <td>
+                                <div class="fw-bold">
+                                    <a asp-controller="Events" asp-action="Details" asp-route-id="@res.EventId" class="text-decoration-none text-dark">
+                                        @res.EventName
+                                    </a>
+                                </div>
+                                <div class="small text-muted">@res.EventCity &bull; @res.EventType</div>
+                            </td>
+                            <td class="fw-semibold small">
+                                @res.EventDate.ToString("dd MMM yyyy")
+                            </td>
+                            <td>
+                                <div class="fw-semibold">@res.CategoryName</div>
+                                <div class="small text-muted">@res.CategoryDistance.ToString("0.##") km</div>
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(res.BibNumber))
+                                {
+                                    <span class="rd-bib">@res.BibNumber</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="fs-5 fw-bold font-monospace">
+                                    @(res.FinishTime?.ToString("HH:mm:ss") ?? "—")
+                                </span>
+                            </td>
+                            <td>
+                                @if (res.Status == "Finished" && res.Position.HasValue)
+                                {
+                                    <span class="rd-position-pill">@res.PositionDisplay</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">@res.PositionDisplay</span>
+                                }
+                            </td>
+                            <td>
+                                <partial name="_StatusBadge" model="res.Status" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
