@@ -1,4 +1,7 @@
+using System.Security.Cryptography;
 using System.Text;
+using Azure.Core;
+using Azure.Storage.Blobs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -8,14 +11,18 @@ using RaceDay.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// EF Core 
+// EF Core
 builder.Services.AddDbContext<RaceDayDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// JWT Authentication
+// JWT Authentication (Environment -> Config -> Ephemeral RNG fallback for isolated sandboxes)
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"]
-    ?? throw new InvalidOperationException("JWT SecretKey is not configured in appsettings.json.");
+var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+    ?? jwtSettings["SecretKey"];
+if (string.IsNullOrWhiteSpace(secretKey))
+{
+    secretKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -30,6 +37,7 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
+        ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 },
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
@@ -38,22 +46,45 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.AddHttpContextAccessor();
 
-// Service Layer DI 
+// Azure Blob Storage SDK registration
+var blobConnString = Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING")
+    ?? builder.Configuration["AzureStorage:ConnectionString"]
+    ?? "UseDevelopmentStorage=true";
+
+builder.Services.AddSingleton(_ =>
+{
+    var clientOptions = new BlobClientOptions
+    {
+        Retry =
+        {
+            MaxRetries = 1,
+            Delay = TimeSpan.FromMilliseconds(300),
+            NetworkTimeout = TimeSpan.FromSeconds(3),
+            Mode = RetryMode.Fixed
+        }
+    };
+    return new BlobServiceClient(blobConnString, clientOptions);
+});
+
+// Service Layer DI
+builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IEnrolmentService, EnrolmentService>();
 builder.Services.AddScoped<IResultService, ResultService>();
+builder.Services.AddScoped<IProfileService, ProfileService>();
 
-//  Controllers 
+// Controllers
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 
-// Swagger / OpenAPI with JWT Bearer support 
+// Swagger / OpenAPI with JWT Bearer support
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -62,7 +93,7 @@ builder.Services.AddSwaggerGen(options =>
         Title = "RaceDay API",
         Version = "v1",
         Description = "REST API for the RaceDay race event management system. " +
-                      "Supports event creation, participant enrolment, and result recording " +
+                      "Supports event creation, Azure Blob Storage banner & profile uploads, participant enrolment, and result recording " +
                       "with JWT-based role authentication (Organiser / Participant).",
         Contact = new Microsoft.OpenApi.Models.OpenApiContact
         {
@@ -70,7 +101,6 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 
-    // JWT Bearer auth in Swagger UI
     options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -97,17 +127,27 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// CORS (for front-end development)
+// CORS (configured for front-end communication)
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "https://localhost:52071", "http://localhost:52072", "http://localhost:8080" };
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    options.AddPolicy("RaceDayWeb", policy =>
+        policy.WithOrigins(allowedOrigins).AllowAnyMethod().AllowAnyHeader());
 });
 
 var app = builder.Build();
 
-//  Middleware Pipeline
+// Middleware Pipeline
 app.UseExceptionHandling();
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "DENY";
+    await next();
+});
 
 if (app.Environment.IsDevelopment())
 {
@@ -115,21 +155,27 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "RaceDay API v1");
-        options.RoutePrefix = string.Empty; // Swagger at root URL
+        options.RoutePrefix = string.Empty;
     });
 }
 
-app.UseHttpsRedirection();
-app.UseCors("AllowAll");
+// In Development the MVC front end (and its Docker container) calls the API over plain HTTP
+// on port 52070; redirecting to HTTPS would break those server-to-server calls.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+app.UseCors("RaceDayWeb");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-//  Auto-migrate on startup (development convenience)
+// Initialise schema and seed sample data on startup
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<RaceDayDbContext>();
-    db.Database.Migrate();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    await DbSeeder.InitialiseAndSeedAsync(db, logger);
 }
 
 app.Run();
