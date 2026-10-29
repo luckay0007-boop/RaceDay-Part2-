@@ -1,89 +1,171 @@
 using Microsoft.EntityFrameworkCore;
 using RaceDay.Api.Data;
 using RaceDay.Api.DTOs.Results;
+using RaceDay.Api.Middleware;
 using RaceDay.Api.Models;
 
 namespace RaceDay.Api.Services;
 
 public class ResultService : IResultService
 {
+    private static readonly string[] ValidStatuses = { "Finished", "DNF", "DSQ" };
+
     private readonly RaceDayDbContext _db;
 
     public ResultService(RaceDayDbContext db) => _db = db;
 
-    public async Task<ResultResponseDto> SubmitResultAsync(SubmitResultDto dto)
+    public async Task<ResultResponseDto> SubmitResultAsync(int organiserId, SubmitResultDto dto)
     {
-        // Validate status
-        var validStatuses = new[] { "Finished", "DNF", "DSQ" };
-        if (!validStatuses.Contains(dto.Status))
+        if (!ValidStatuses.Contains(dto.Status))
             throw new ArgumentException($"Invalid result status '{dto.Status}'. Must be Finished, DNF, or DSQ.");
 
-        // Verify the enrolment exists
         var enrolment = await _db.Enrolments
             .Include(e => e.Participant)
             .Include(e => e.Category)
+                .ThenInclude(c => c.Event)
             .FirstOrDefaultAsync(e => e.EnrolmentId == dto.EnrolmentId)
             ?? throw new KeyNotFoundException($"Enrolment with ID {dto.EnrolmentId} not found.");
 
-        // Check if result already exists for this enrolment
-        var existingResult = await _db.Results
-            .AnyAsync(r => r.EnrolmentId == dto.EnrolmentId);
+        if (enrolment.Category.Event.OrganiserId != organiserId)
+            throw new ForbiddenAccessException("You can only record results for your own events.");
 
-        if (existingResult)
-            throw new InvalidOperationException("A result has already been recorded for this enrolment.");
-
-        // Validate: finished results should have a finish time
         if (dto.Status == "Finished" && dto.FinishTime is null)
             throw new ArgumentException("FinishTime is required when status is 'Finished'.");
 
-        var result = new Result
-        {
-            EnrolmentId = dto.EnrolmentId,
-            FinishTime = dto.FinishTime,
-            Position = dto.Position,
-            Status = dto.Status,
-            RecordedAt = DateTime.UtcNow
-        };
+        var finishTime = dto.Status == "Finished" ? dto.FinishTime : null;
+        var position = dto.Status == "Finished" ? dto.Position : null;
 
-        _db.Results.Add(result);
+        var result = await _db.Results.FirstOrDefaultAsync(r => r.EnrolmentId == dto.EnrolmentId);
+        if (result is null)
+        {
+            result = new Result
+            {
+                EnrolmentId = dto.EnrolmentId,
+                FinishTime = finishTime,
+                Position = position,
+                Status = dto.Status,
+                RecordedAt = DateTime.UtcNow
+            };
+            _db.Results.Add(result);
+        }
+        else
+        {
+            result.FinishTime = finishTime;
+            result.Position = position;
+            result.Status = dto.Status;
+            result.RecordedAt = DateTime.UtcNow;
+        }
+
+        if (enrolment.Status is "Pending" or "Registered")
+            enrolment.Status = "Confirmed";
+
         await _db.SaveChangesAsync();
 
-        return new ResultResponseDto
-        {
-            ResultId = result.ResultId,
-            EnrolmentId = result.EnrolmentId,
-            ParticipantName = $"{enrolment.Participant.FirstName} {enrolment.Participant.LastName}",
-            BibNumber = enrolment.BibNumber,
-            CategoryName = enrolment.Category.Name,
-            FinishTime = result.FinishTime,
-            Position = result.Position,
-            Status = result.Status,
-            RecordedAt = result.RecordedAt
-        };
+        var totalFinishers = await _db.Results
+            .CountAsync(r => r.Enrolment.CategoryId == enrolment.CategoryId && r.Status == "Finished");
+
+        return MapToDto(result, enrolment, totalFinishers);
     }
 
     public async Task<List<ResultResponseDto>> GetResultsByEventAsync(int eventId)
     {
-        return await _db.Results
+        var results = await _db.Results
+            .AsNoTracking()
             .Include(r => r.Enrolment)
                 .ThenInclude(e => e.Participant)
             .Include(r => r.Enrolment)
                 .ThenInclude(e => e.Category)
+                    .ThenInclude(c => c.Event)
             .Where(r => r.Enrolment.Category.EventId == eventId)
-            .OrderBy(r => r.Enrolment.Category.Name)
-            .ThenBy(r => r.Position)
-            .Select(r => new ResultResponseDto
-            {
-                ResultId = r.ResultId,
-                EnrolmentId = r.EnrolmentId,
-                ParticipantName = r.Enrolment.Participant.FirstName + " " + r.Enrolment.Participant.LastName,
-                BibNumber = r.Enrolment.BibNumber,
-                CategoryName = r.Enrolment.Category.Name,
-                FinishTime = r.FinishTime,
-                Position = r.Position,
-                Status = r.Status,
-                RecordedAt = r.RecordedAt
-            })
+            .OrderBy(r => r.Enrolment.Category.Distance)
+            .ThenBy(r => r.Position ?? int.MaxValue)
+            .ThenBy(r => r.FinishTime)
             .ToListAsync();
+
+        var finishersByCategory = results
+            .Where(r => r.Status == "Finished")
+            .GroupBy(r => r.Enrolment.CategoryId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        return results
+            .Select(r => MapToDto(
+                r,
+                r.Enrolment,
+                finishersByCategory.GetValueOrDefault(r.Enrolment.CategoryId, 0)))
+            .ToList();
+    }
+
+    public async Task<List<ResultResponseDto>> GetResultsByParticipantAsync(int participantId)
+    {
+        var results = await _db.Results
+            .AsNoTracking()
+            .Include(r => r.Enrolment)
+                .ThenInclude(e => e.Participant)
+            .Include(r => r.Enrolment)
+                .ThenInclude(e => e.Category)
+                    .ThenInclude(c => c.Event)
+            .Where(r => r.Enrolment.ParticipantId == participantId)
+            .OrderByDescending(r => r.Enrolment.Category.Event.EventDate)
+            .ToListAsync();
+
+        var categoryIds = results.Select(r => r.Enrolment.CategoryId).Distinct().ToList();
+        var finishersByCategory = await _db.Results
+            .AsNoTracking()
+            .Where(r => categoryIds.Contains(r.Enrolment.CategoryId) && r.Status == "Finished")
+            .GroupBy(r => r.Enrolment.CategoryId)
+            .Select(g => new { CategoryId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.CategoryId, x => x.Count);
+
+        return results
+            .Select(r => MapToDto(
+                r,
+                r.Enrolment,
+                finishersByCategory.GetValueOrDefault(r.Enrolment.CategoryId, 0)))
+            .ToList();
+    }
+
+    private static ResultResponseDto MapToDto(Result r, Enrolment e, int totalFinishers)
+    {
+        var ev = e.Category.Event;
+        var posDisplay = r.Status == "Finished" && r.Position.HasValue
+            ? $"{FormatOrdinal(r.Position.Value)} out of {Math.Max(totalFinishers, r.Position.Value)} {(Math.Max(totalFinishers, r.Position.Value) == 1 ? "finisher" : "finishers")}"
+            : r.Status;
+
+        return new ResultResponseDto
+        {
+            ResultId = r.ResultId,
+            EnrolmentId = r.EnrolmentId,
+            EventId = ev?.EventId ?? e.Category.EventId,
+            EventName = ev?.Name ?? string.Empty,
+            EventDate = ev?.EventDate ?? default,
+            EventLocation = ev?.Location ?? string.Empty,
+            EventCity = ev?.City ?? string.Empty,
+            EventType = ev?.EventType ?? string.Empty,
+            CategoryId = e.CategoryId,
+            CategoryName = e.Category.Name,
+            CategoryDistance = e.Category.Distance,
+            ParticipantName = $"{e.Participant.FirstName} {e.Participant.LastName}",
+            BibNumber = e.BibNumber,
+            FinishTime = r.FinishTime,
+            Position = r.Position,
+            TotalFinishers = totalFinishers,
+            PositionDisplay = posDisplay,
+            Status = r.Status,
+            RecordedAt = r.RecordedAt
+        };
+    }
+
+    public static string FormatOrdinal(int number)
+    {
+        if (number <= 0) return number.ToString();
+        var rem100 = number % 100;
+        if (rem100 is 11 or 12 or 13) return $"{number}th";
+        return (number % 10) switch
+        {
+            1 => $"{number}st",
+            2 => $"{number}nd",
+            3 => $"{number}rd",
+            _ => $"{number}th"
+        };
     }
 }
