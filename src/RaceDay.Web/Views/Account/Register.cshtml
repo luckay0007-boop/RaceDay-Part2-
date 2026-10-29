@@ -1,0 +1,138 @@
+@model RegisterViewModel
+@{
+    ViewData["Title"] = "Create Account";
+    var provinces = new[]
+    {
+        "Eastern Cape", "Free State", "Gauteng", "KwaZulu-Natal",
+        "Limpopo", "Mpumalanga", "Northern Cape", "North West", "Western Cape"
+    };
+}
+
+<div class="row justify-content-center py-3">
+    <div class="col-lg-8">
+        <div class="rd-card p-4 p-md-5">
+            <div class="text-center mb-4">
+                <span class="rd-hero-kicker">Join the Starting Line</span>
+                <h1 class="h2 mb-1">Create Your RaceDay Account</h1>
+                <p class="text-muted small mb-0">Register as a Race Organiser to host events or as a Participant to compete</p>
+            </div>
+
+            <form asp-action="Register" method="post" novalidate>
+                @Html.AntiForgeryToken()
+
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small" role="alert"></div>
+
+                <div class="mb-4">
+                    <label asp-for="Role" class="form-label fw-bold text-uppercase small">Select Your Role</label>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="form-check border rounded-3 p-3 h-100 bg-light">
+                                <input class="form-check-input" type="radio" asp-for="Role" value="Participant" id="roleParticipant" />
+                                <label class="form-check-label d-block ms-1" for="roleParticipant">
+                                    <span class="fw-bold d-block">Participant (Athlete)</span>
+                                    <span class="text-muted small">Browse upcoming races, enrol in categories, and track official finish times.</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check border rounded-3 p-3 h-100 bg-light">
+                                <input class="form-check-input" type="radio" asp-for="Role" value="Organiser" id="roleOrganiser" />
+                                <label class="form-check-label d-block ms-1" for="roleOrganiser">
+                                    <span class="fw-bold d-block">Event Organiser</span>
+                                    <span class="text-muted small">Create events, upload banners, configure categories, and publish race results.</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <span asp-validation-for="Role" class="text-danger small"></span>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label asp-for="FirstName" class="form-label fw-semibold"></label>
+                        <input asp-for="FirstName" class="form-control" placeholder="Lerato" />
+                        <span asp-validation-for="FirstName" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="LastName" class="form-label fw-semibold"></label>
+                        <input asp-for="LastName" class="form-control" placeholder="Ndlovu" />
+                        <span asp-validation-for="LastName" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Email" class="form-label fw-semibold"></label>
+                    <input asp-for="Email" class="form-control" placeholder="athlete@example.co.za" autocomplete="email" />
+                    <span asp-validation-for="Email" class="text-danger small"></span>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label asp-for="Password" class="form-label fw-semibold"></label>
+                        <input asp-for="Password" class="form-control" placeholder="Min. 8 characters" autocomplete="new-password" />
+                        <span asp-validation-for="Password" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="ConfirmPassword" class="form-label fw-semibold"></label>
+                        <input asp-for="ConfirmPassword" class="form-control" placeholder="Re-enter password" autocomplete="new-password" />
+                        <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label asp-for="DateOfBirth" class="form-label fw-semibold"></label>
+                        <input asp-for="DateOfBirth" type="date" class="form-control" />
+                        <span asp-validation-for="DateOfBirth" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="Gender" class="form-label fw-semibold"></label>
+                        <select asp-for="Gender" class="form-select">
+                            <option value="">Prefer not to specify</option>
+                            <option value="Female">Female</option>
+                            <option value="Male">Male</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <span asp-validation-for="Gender" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="PhoneNumber" class="form-label fw-semibold"></label>
+                        <input asp-for="PhoneNumber" class="form-control" placeholder="+27 82 000 0000" />
+                        <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label asp-for="City" class="form-label fw-semibold"></label>
+                        <input asp-for="City" class="form-control" placeholder="Cape Town" />
+                        <span asp-validation-for="City" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Province" class="form-label fw-semibold"></label>
+                        <select asp-for="Province" class="form-select">
+                            <option value="">Select Province</option>
+                            @foreach (var prov in provinces)
+                            {
+                                <option value="@prov">@prov</option>
+                            }
+                        </select>
+                        <span asp-validation-for="Province" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-rd-primary btn-lg w-100 mb-3">
+                    Create RaceDay Account
+                </button>
+
+                <div class="text-center small text-muted">
+                    Already registered?
+                    <a asp-action="Login" class="fw-bold text-decoration-none" style="color: var(--rd-primary);">
+                        Sign in to your account
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
