@@ -37,6 +37,21 @@ public class CategoriesController : ControllerBase
         return CreatedAtAction(nameof(GetByEvent), new { eventId = result.EventId }, result);
     }
 
+    /// Delete a category from an event. Organisers only (own events).
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Organiser")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var organiserId = GetUserId();
+        var deleted = await _categoryService.DeleteCategoryAsync(id, organiserId);
+        if (!deleted) return NotFound();
+        return NoContent();
+    }
+
     private int GetUserId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier)

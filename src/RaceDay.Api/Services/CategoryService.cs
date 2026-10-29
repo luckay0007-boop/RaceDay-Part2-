@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RaceDay.Api.Data;
 using RaceDay.Api.DTOs.Events;
+using RaceDay.Api.Middleware;
 using RaceDay.Api.Models;
 
 namespace RaceDay.Api.Services;
@@ -14,6 +15,7 @@ public class CategoryService : ICategoryService
     public async Task<List<CategoryResponseDto>> GetCategoriesByEventAsync(int eventId)
     {
         return await _db.Categories
+            .AsNoTracking()
             .Where(c => c.EventId == eventId)
             .OrderBy(c => c.Distance)
             .Select(c => new CategoryResponseDto
@@ -24,6 +26,7 @@ public class CategoryService : ICategoryService
                 Distance = c.Distance,
                 MaxParticipants = c.MaxParticipants,
                 EntryFee = c.EntryFee,
+                EnrolledCount = c.Enrolments.Count(en => en.Status != "Withdrawn"),
                 CreatedAt = c.CreatedAt
             })
             .ToListAsync();
@@ -31,17 +34,16 @@ public class CategoryService : ICategoryService
 
     public async Task<CategoryResponseDto> CreateCategoryAsync(int organiserId, CreateCategoryDto dto)
     {
-        // Verify the event exists and belongs to this organiser
         var ev = await _db.Events.FindAsync(dto.EventId)
             ?? throw new KeyNotFoundException($"Event with ID {dto.EventId} not found.");
 
         if (ev.OrganiserId != organiserId)
-            throw new UnauthorizedAccessException("You can only add categories to your own events.");
+            throw new ForbiddenAccessException("You can only add categories to your own events.");
 
         var category = new Category
         {
             EventId = dto.EventId,
-            Name = dto.Name,
+            Name = dto.Name.Trim(),
             Distance = dto.Distance,
             MaxParticipants = dto.MaxParticipants,
             EntryFee = dto.EntryFee,
@@ -59,7 +61,24 @@ public class CategoryService : ICategoryService
             Distance = category.Distance,
             MaxParticipants = category.MaxParticipants,
             EntryFee = category.EntryFee,
+            EnrolledCount = 0,
             CreatedAt = category.CreatedAt
         };
+    }
+
+    public async Task<bool> DeleteCategoryAsync(int categoryId, int organiserId)
+    {
+        var category = await _db.Categories
+            .Include(c => c.Event)
+            .FirstOrDefaultAsync(c => c.CategoryId == categoryId);
+
+        if (category is null) return false;
+
+        if (category.Event.OrganiserId != organiserId)
+            throw new ForbiddenAccessException("You can only delete categories from your own events.");
+
+        _db.Categories.Remove(category);
+        await _db.SaveChangesAsync();
+        return true;
     }
 }
