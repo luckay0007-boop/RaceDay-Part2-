@@ -1,0 +1,138 @@
+@model CategoryManagementViewModel
+@{
+    ViewData["Title"] = "Category Management";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-1">Category Management</h1>
+        <p class="text-muted small mb-0">Add age or distance categories, entry fees, and participant capacity limits to each event</p>
+    </div>
+
+    @if (Model.OrganiserEvents.Count > 0)
+    {
+        <form asp-action="Categories" method="get" class="d-flex align-items-center gap-2">
+            <label for="eventSelector" class="small fw-bold text-uppercase text-muted text-nowrap">Select Event:</label>
+            <select id="eventSelector" name="eventId" class="form-select" data-rd-autosubmit="true">
+                @foreach (var ev in Model.OrganiserEvents)
+                {
+                    <option value="@ev.EventId" selected="@(Model.SelectedEvent?.EventId == ev.EventId)">
+                        @ev.Name (@ev.EventDate.ToString("dd MMM yyyy"))
+                    </option>
+                }
+            </select>
+        </form>
+    }
+</div>
+
+@if (Model.SelectedEvent is null)
+{
+    <div class="rd-card p-5 text-center">
+        <h2 class="h5 mb-2">Create an Event First</h2>
+        <p class="text-muted small mb-3">You need at least one event before you can configure race categories.</p>
+        <a asp-action="CreateEvent" class="btn btn-rd-primary">+ Create Event</a>
+    </div>
+}
+else
+{
+    <div class="row g-4">
+        <!-- Add Category Form -->
+        <div class="col-lg-5">
+            <div class="rd-card p-4">
+                <h2 class="h4 mb-1">Add Category</h2>
+                <p class="text-muted small mb-3">Adding to <strong>@Model.SelectedEvent.Name</strong></p>
+
+                <form asp-action="CreateCategory" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" asp-for="NewCategory.EventId" value="@Model.SelectedEvent.EventId" />
+
+                    <div class="mb-3">
+                        <label asp-for="NewCategory.Name" class="form-label fw-semibold"></label>
+                        <input asp-for="NewCategory.Name" class="form-control" placeholder="e.g. 21.1km Open Half Marathon or Juniors U20 5km" required />
+                        <span asp-validation-for="NewCategory.Name" class="text-danger small"></span>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label asp-for="NewCategory.Distance" class="form-label fw-semibold"></label>
+                            <input asp-for="NewCategory.Distance" type="number" step="0.1" min="0.1" class="form-control" required />
+                        </div>
+                        <div class="col-6">
+                            <label asp-for="NewCategory.EntryFee" class="form-label fw-semibold"></label>
+                            <input asp-for="NewCategory.EntryFee" type="number" step="5" min="0" class="form-control" required />
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label asp-for="NewCategory.MaxParticipants" class="form-label fw-semibold"></label>
+                        <input asp-for="NewCategory.MaxParticipants" type="number" min="1" class="form-control" placeholder="Leave blank for unlimited" />
+                    </div>
+
+                    <button type="submit" class="btn btn-rd-primary w-100">
+                        + Add Category to Event
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Existing Categories Table -->
+        <div class="col-lg-7">
+            <div class="rd-card p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h2 class="h4 mb-0">Configured Categories (@Model.Categories.Count)</h2>
+                        <p class="text-muted small mb-0">@Model.SelectedEvent.Name &bull; @Model.SelectedEvent.EventType</p>
+                    </div>
+                    <a asp-controller="Events" asp-action="Details" asp-route-id="@Model.SelectedEvent.EventId" class="btn btn-sm btn-outline-dark">
+                        Preview Event Page
+                    </a>
+                </div>
+
+                @if (Model.Categories.Count == 0)
+                {
+                    <div class="alert alert-light border small mb-0">
+                        No categories have been added to this event yet. Use the form on the left to add distance or age categories.
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Category Name</th>
+                                    <th>Distance</th>
+                                    <th>Entry Fee</th>
+                                    <th>Enrolled / Cap</th>
+                                    <th class="text-end">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var cat in Model.Categories)
+                                {
+                                    <tr>
+                                        <td class="fw-bold">@cat.Name</td>
+                                        <td><span class="badge bg-dark">@cat.Distance.ToString("0.##") km</span></td>
+                                        <td>R @cat.EntryFee.ToString("0.00")</td>
+                                        <td>
+                                            @cat.EnrolledCount / @(cat.MaxParticipants?.ToString() ?? "∞")
+                                        </td>
+                                        <td class="text-end">
+                                            <form asp-action="DeleteCategory" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="categoryId" value="@cat.CategoryId" />
+                                                <input type="hidden" name="eventId" value="@Model.SelectedEvent.EventId" />
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
