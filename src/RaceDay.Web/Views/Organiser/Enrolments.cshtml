@@ -1,0 +1,128 @@
+@model EnrolmentManagementViewModel
+@{
+    ViewData["Title"] = "Event Enrolments";
+    var statuses = new[] { "Confirmed", "Pending", "Registered", "Withdrawn", "DNS" };
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-1">Participant Enrolments</h1>
+        <p class="text-muted small mb-0">View all Participants enrolled for a specific event, their selected category, and colour-coded enrolment status</p>
+    </div>
+
+    @if (Model.OrganiserEvents.Count > 0)
+    {
+        <form asp-action="Enrolments" method="get" class="d-flex flex-wrap align-items-center gap-2">
+            <select name="eventId" class="form-select" style="min-width: 250px;" data-rd-autosubmit="true">
+                @foreach (var ev in Model.OrganiserEvents)
+                {
+                    <option value="@ev.EventId" selected="@(Model.SelectedEvent?.EventId == ev.EventId)">
+                        @ev.Name (@ev.EnrolmentCount enrolled)
+                    </option>
+                }
+            </select>
+            <select name="statusFilter" class="form-select" style="width: 160px;" data-rd-autosubmit="true">
+                <option value="">All Statuses</option>
+                @foreach (var st in statuses)
+                {
+                    <option value="@st" selected="@(Model.StatusFilter == st)">@st</option>
+                }
+            </select>
+        </form>
+    }
+</div>
+
+@if (Model.SelectedEvent is null)
+{
+    <div class="rd-card p-5 text-center">
+        <h2 class="h5 mb-2">No Events Found</h2>
+        <p class="text-muted small mb-3">Create an event first to view participant enrolments.</p>
+        <a asp-action="CreateEvent" class="btn btn-rd-primary">+ Create Event</a>
+    </div>
+}
+else
+{
+    <div class="rd-card p-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-3 border-bottom">
+            <div>
+                <h2 class="h4 mb-0">@Model.SelectedEvent.Name — Enrolment Roster</h2>
+                <div class="small text-muted">
+                    @Model.SelectedEvent.EventDate.ToString("dd MMM yyyy") &bull; @Model.SelectedEvent.Location, @Model.SelectedEvent.City
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="rd-badge rd-status-confirmed">
+                    @Model.Enrolments.Count(e => e.Status == "Confirmed") Confirmed
+                </span>
+                <span class="rd-badge rd-status-pending">
+                    @Model.Enrolments.Count(e => e.Status is "Pending" or "Registered") Pending
+                </span>
+                <a asp-action="Results" asp-route-eventId="@Model.SelectedEvent.EventId" class="btn btn-sm btn-rd-primary ms-2">
+                    Go to Results Entry &rarr;
+                </a>
+            </div>
+        </div>
+
+        @if (Model.Enrolments.Count == 0)
+        {
+            <div class="text-center py-4 text-muted">
+                No participant enrolments match the selected event / filter yet.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Bib #</th>
+                            <th>Participant</th>
+                            <th>Contact</th>
+                            <th>Selected Category</th>
+                            <th>Enrolled Date</th>
+                            <th>Enrolment Status</th>
+                            <th class="text-end">Update Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var enr in Model.Enrolments)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="rd-bib">@(enr.BibNumber ?? "TBA")</span>
+                                </td>
+                                <td class="fw-bold">@enr.ParticipantName</td>
+                                <td class="small text-muted">@PiiMasker.MaskEmail(enr.ParticipantEmail)</td>
+                                <td>
+                                    <div class="fw-semibold">@enr.CategoryName</div>
+                                    <div class="small text-muted">@enr.CategoryDistance.ToString("0.##") km &bull; R @enr.EntryFee.ToString("0.00")</div>
+                                </td>
+                                <td class="small text-muted">
+                                    @enr.EnrolmentDate.ToString("dd MMM yyyy")
+                                </td>
+                                <td>
+                                    <partial name="_StatusBadge" model="enr.Status" />
+                                </td>
+                                <td class="text-end">
+                                    <form asp-action="UpdateEnrolmentStatus" method="post" class="d-inline-flex align-items-center gap-1">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="enrolmentId" value="@enr.EnrolmentId" />
+                                        <input type="hidden" name="eventId" value="@Model.SelectedEvent.EventId" />
+                                        <select name="status" class="form-select form-select-sm" style="width: 135px;">
+                                            @foreach (var st in statuses)
+                                            {
+                                                <option value="@st" selected="@(enr.Status == st)">@st</option>
+                                            }
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-outline-dark">Apply</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
