@@ -1,0 +1,22 @@
+@model string
+@{
+    var status = (Model ?? "Pending").Trim();
+    var cssClass = status.ToLowerInvariant() switch
+    {
+        "confirmed" => "rd-status-confirmed",
+        "published" => "rd-status-published",
+        "finished" => "rd-status-finished",
+        "pending" => "rd-status-pending",
+        "registered" => "rd-status-registered",
+        "draft" => "rd-status-draft",
+        "completed" => "rd-status-completed",
+        "withdrawn" => "rd-status-withdrawn",
+        "cancelled" => "rd-status-cancelled",
+        "dns" => "rd-status-dns",
+        "dnf" => "rd-status-dnf",
+        "dsq" => "rd-status-dsq",
+        _ => "rd-status-pending"
+    };
+}
+<span class="rd-badge @cssClass">@status</span>
+

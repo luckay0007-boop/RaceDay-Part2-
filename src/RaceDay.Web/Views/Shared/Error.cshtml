@@ -1,0 +1,28 @@
+@model ErrorViewModel
+@{
+    ViewData["Title"] = "Something Went Wrong";
+}
+
+<div class="row justify-content-center py-5">
+    <div class="col-md-7">
+        <div class="rd-card p-5 text-center">
+            <span class="rd-badge rd-status-withdrawn mb-3">Application Notice</span>
+            <h1 class="h2 mb-3">We Hit a Hurdle on the Course</h1>
+            <p class="text-secondary mb-4">
+                @(Model?.UserMessage ?? "An unexpected error occurred while processing your request. Please try again.")
+            </p>
+            @if (Model?.ShowRequestId == true)
+            {
+                <p class="small text-muted mb-4">
+                    Reference ID: <code>@Model.RequestId</code>
+                </p>
+            }
+            <div class="d-flex justify-content-center gap-3">
+                <a asp-controller="Events" asp-action="Index" class="btn btn-rd-primary">
+                    Back to Upcoming Events
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
