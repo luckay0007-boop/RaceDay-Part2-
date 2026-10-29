@@ -1,0 +1,204 @@
+@model EventCatalogViewModel
+@{
+    ViewData["Title"] = "Upcoming Race Events";
+    var isAuthenticated = Context.Session.IsAuthenticated();
+    var isOrganiser = Context.Session.IsOrganiser();
+}
+
+<section class="rd-hero mb-4">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <span class="rd-hero-kicker">Official South African Race Calendar</span>
+            <h1 class="display-5 fw-bold mb-2">Find Your Next Starting Line</h1>
+            <p class="lead text-white-50 mb-4">
+                Discover certified road marathons, city night runs, coastal cycling classics, and heritage walks across South Africa. Select a category and secure your race bib in seconds.
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+                @if (!isAuthenticated)
+                {
+                    <a asp-controller="Account" asp-action="Register" class="btn btn-rd-primary btn-lg">
+                        Register as Athlete
+                    </a>
+                    <a asp-controller="Account" asp-action="Register" asp-route-role="Organiser" class="btn btn-outline-light btn-lg">
+                        Host an Event
+                    </a>
+                }
+                else if (isOrganiser)
+                {
+                    <a asp-controller="Organiser" asp-action="CreateEvent" class="btn btn-rd-primary btn-lg">
+                        + Create New Race Event
+                    </a>
+                    <a asp-controller="Organiser" asp-action="Dashboard" class="btn btn-outline-light btn-lg">
+                        Organiser Dashboard
+                    </a>
+                }
+                else
+                {
+                    <a asp-controller="Participant" asp-action="Enrolments" class="btn btn-rd-primary btn-lg">
+                        View My Enrolments
+                    </a>
+                    <a asp-controller="Participant" asp-action="Results" class="btn btn-outline-light btn-lg">
+                        My Race Results
+                    </a>
+                }
+            </div>
+        </div>
+        <div class="col-lg-4 d-none d-lg-block text-end">
+            <div class="p-4 rounded-4 border border-secondary bg-dark bg-opacity-50 text-start">
+                <div class="text-uppercase small fw-bold text-warning mb-1">Live Platform Stats</div>
+                <div class="display-6 fw-bold text-white">@Model.Events.Count</div>
+                <div class="text-white-50 small mb-3">Active Events Matching Filter</div>
+                <div class="d-flex justify-content-between small border-top border-secondary pt-2 text-white-50">
+                    <span>Running &bull; Cycling &bull; Walking</span>
+                    <span class="text-success fw-bold">Instant Enrolment</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Filter Bar -->
+<section class="rd-card p-4 mb-4">
+    <form asp-controller="Events" asp-action="Index" method="get" class="row g-3 align-items-end">
+        <div class="col-md-3">
+            <label for="search" class="form-label small fw-bold text-uppercase text-muted">Search Event or Venue</label>
+            <input type="text" id="search" name="search" value="@Model.Search" class="form-control" placeholder="e.g. Marathon, Sandton..." />
+        </div>
+        <div class="col-md-2">
+            <label for="type" class="form-label small fw-bold text-uppercase text-muted">Discipline</label>
+            <select id="type" name="type" class="form-select">
+                <option value="">All Types</option>
+                <option value="Running" selected="@(Model.Type == "Running")">Running</option>
+                <option value="Cycling" selected="@(Model.Type == "Cycling")">Cycling</option>
+                <option value="Walking" selected="@(Model.Type == "Walking")">Walking</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label for="city" class="form-label small fw-bold text-uppercase text-muted">City</label>
+            <input type="text" id="city" name="city" value="@Model.City" class="form-control" placeholder="e.g. Cape Town" />
+        </div>
+        <div class="col-md-2">
+            <label for="from" class="form-label small fw-bold text-uppercase text-muted">From Date</label>
+            <input type="date" id="from" name="from" value="@(Model.From?.ToString("yyyy-MM-dd"))" class="form-control" />
+        </div>
+        <div class="col-md-3 d-flex align-items-center justify-content-between gap-2">
+            <div class="form-check pt-2">
+                <input class="form-check-input" type="checkbox" id="upcomingOnly" name="upcomingOnly" value="true" checked="@Model.UpcomingOnly" />
+                <input type="hidden" name="upcomingOnly" value="false" />
+                <label class="form-check-label small fw-semibold" for="upcomingOnly">
+                    Upcoming Only
+                </label>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-rd-primary">Filter</button>
+                <a asp-controller="Events" asp-action="Index" asp-route-upcomingOnly="false" class="btn btn-outline-secondary">All</a>
+            </div>
+        </div>
+    </form>
+</section>
+
+<!-- Events Grid -->
+@if (Model.Events.Count == 0)
+{
+    <div class="rd-card p-5 text-center">
+        <h2 class="h4 mb-2">No Events Match Your Filter</h2>
+        <p class="text-muted mb-3">Try clearing your search filters or viewing all events including completed races.</p>
+        <a asp-controller="Events" asp-action="Index" asp-route-upcomingOnly="false" class="btn btn-rd-primary">
+            Show All Events
+        </a>
+    </div>
+}
+else
+{
+    <div class="row g-4">
+        @foreach (var ev in Model.Events)
+        {
+            var typeClass = ev.EventType.ToLowerInvariant() switch
+            {
+                "cycling" => "rd-type-cycling",
+                "walking" => "rd-type-walking",
+                _ => "rd-type-running"
+            };
+            var bannerFallbackClass = ev.EventType.ToLowerInvariant() switch
+            {
+                "cycling" => "rd-banner-cycling",
+                "walking" => "rd-banner-walking",
+                _ => "rd-banner-running"
+            };
+
+            <div class="col-lg-4 col-md-6">
+                <div class="rd-card rd-card-hover h-100 d-flex flex-column">
+                    @if (!string.IsNullOrWhiteSpace(ev.BannerImageUrl))
+                    {
+                        <img src="@ev.BannerImageUrl" alt="@ev.Name banner" class="rd-event-banner" />
+                    }
+                    else
+                    {
+                        <div class="rd-event-banner-fallback @bannerFallbackClass">
+                            <span class="text-uppercase fw-bold small opacity-75">@ev.EventType</span>
+                            <span class="rd-heading fs-2">@ev.Distance.ToString("0.#") KM</span>
+                            <span class="small opacity-75">@ev.City, @ev.Province</span>
+                        </div>
+                    }
+
+                    <div class="p-4 d-flex flex-column flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="rd-type-badge @typeClass">@ev.EventType &bull; @ev.Distance.ToString("0.#") km</span>
+                            <partial name="_StatusBadge" model="ev.Status" />
+                        </div>
+
+                        <h2 class="h4 mb-2">
+                            <a asp-controller="Events" asp-action="Details" asp-route-id="@ev.EventId"
+                               class="text-decoration-none text-dark">
+                                @ev.Name
+                            </a>
+                        </h2>
+
+                        <div class="small text-muted mb-3">
+                            <div class="mb-1">
+                                <strong>Date:</strong> @ev.EventDate.ToString("ddd, dd MMM yyyy") at @ev.StartTime.ToString("HH:mm")
+                            </div>
+                            <div class="mb-1">
+                                <strong>Venue:</strong> @ev.Location, @ev.City (@ev.Province)
+                            </div>
+                            <div>
+                                <strong>Categories:</strong> @ev.Categories.Count available &bull;
+                                <strong>@ev.EnrolmentCount</strong> enrolled
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(ev.Description))
+                        {
+                            <p class="small text-secondary mb-3 flex-grow-1">
+                                @(ev.Description.Length > 130 ? ev.Description[..130] + "..." : ev.Description)
+                            </p>
+                        }
+                        else
+                        {
+                            <div class="flex-grow-1"></div>
+                        }
+
+                        <div class="d-flex justify-content-between align-items-center pt-3 border-top mt-auto">
+                            <div class="small">
+                                @if (ev.Categories.Count > 0)
+                                {
+                                    var minFee = ev.Categories.Min(c => c.EntryFee);
+                                    <span class="text-muted">From</span>
+                                    <span class="fw-bold text-dark">R @minFee.ToString("0.00")</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Categories TBA</span>
+                                }
+                            </div>
+                            <a asp-controller="Events" asp-action="Details" asp-route-id="@ev.EventId" class="btn btn-sm btn-rd-primary">
+                                View Event &amp; Enrol
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+

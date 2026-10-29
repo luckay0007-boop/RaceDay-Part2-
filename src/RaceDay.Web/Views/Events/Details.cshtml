@@ -1,0 +1,283 @@
+@model EventDetailsViewModel
+@{
+    var ev = Model.Event;
+    ViewData["Title"] = ev.Name;
+    var isAuthenticated = Context.Session.IsAuthenticated();
+    var typeClass = ev.EventType.ToLowerInvariant() switch
+    {
+        "cycling" => "rd-type-cycling",
+        "walking" => "rd-type-walking",
+        _ => "rd-type-running"
+    };
+    var bannerFallbackClass = ev.EventType.ToLowerInvariant() switch
+    {
+        "cycling" => "rd-banner-cycling",
+        "walking" => "rd-banner-walking",
+        _ => "rd-banner-running"
+    };
+}
+
+<div class="mb-3">
+    <a asp-controller="Events" asp-action="Index" class="text-decoration-none small fw-semibold text-secondary">
+        &larr; Back to Event Calendar
+    </a>
+</div>
+
+<div class="rd-card overflow-hidden mb-4">
+    @if (!string.IsNullOrWhiteSpace(ev.BannerImageUrl))
+    {
+        <img src="@ev.BannerImageUrl" alt="@ev.Name official banner" class="rd-detail-banner rounded-0" />
+    }
+    else
+    {
+        <div class="rd-event-banner-fallback @bannerFallbackClass" style="height: 260px;">
+            <span class="rd-hero-kicker mb-2">@ev.EventType Official Event</span>
+            <h1 class="display-5 fw-bold text-white text-center px-3 mb-1">@ev.Name</h1>
+            <p class="mb-0 text-white-50">@ev.Location &bull; @ev.City, @ev.Province</p>
+        </div>
+    }
+
+    <div class="p-4 p-md-5">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+            <div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <span class="rd-type-badge @typeClass">@ev.EventType</span>
+                    <span class="badge bg-dark">@ev.Distance.ToString("0.#") km Feature Distance</span>
+                    <partial name="_StatusBadge" model="ev.Status" />
+                </div>
+                <h1 class="h2 mb-1">@ev.Name</h1>
+                <p class="text-muted mb-0">
+                    Organised by <strong>@(string.IsNullOrWhiteSpace(ev.OrganiserName) ? "RaceDay Official Organiser" : ev.OrganiserName)</strong>
+                </p>
+            </div>
+
+            @if (Model.IsOrganiserOwner)
+            {
+                <div class="d-flex flex-wrap gap-2">
+                    <a asp-controller="Organiser" asp-action="EditEvent" asp-route-id="@ev.EventId" class="btn btn-outline-dark btn-sm">
+                        Edit Event &amp; Banner
+                    </a>
+                    <a asp-controller="Organiser" asp-action="Categories" asp-route-eventId="@ev.EventId" class="btn btn-outline-dark btn-sm">
+                        Manage Categories
+                    </a>
+                    <a asp-controller="Organiser" asp-action="Enrolments" asp-route-eventId="@ev.EventId" class="btn btn-outline-dark btn-sm">
+                        View Enrolments (@ev.EnrolmentCount)
+                    </a>
+                    <a asp-controller="Organiser" asp-action="Results" asp-route-eventId="@ev.EventId" class="btn btn-rd-primary btn-sm">
+                        Results Entry
+                    </a>
+                </div>
+            }
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-3 col-6">
+                <div class="p-3 bg-light rounded-3 border h-100">
+                    <div class="small text-muted text-uppercase fw-bold">Race Date</div>
+                    <div class="fw-bold fs-5">@ev.EventDate.ToString("dd MMM yyyy")</div>
+                    <div class="small text-secondary">@ev.EventDate.ToString("dddd")</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="p-3 bg-light rounded-3 border h-100">
+                    <div class="small text-muted text-uppercase fw-bold">Gun Start Time</div>
+                    <div class="fw-bold fs-5">@ev.StartTime.ToString("HH:mm")</div>
+                    <div class="small text-secondary">SAST Local Time</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="p-3 bg-light rounded-3 border h-100">
+                    <div class="small text-muted text-uppercase fw-bold">Venue &amp; City</div>
+                    <div class="fw-bold">@ev.Location</div>
+                    <div class="small text-secondary">@ev.City, @ev.Province</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="p-3 bg-light rounded-3 border h-100">
+                    <div class="small text-muted text-uppercase fw-bold">Total Enrolled</div>
+                    <div class="fw-bold fs-5">@ev.EnrolmentCount Athletes</div>
+                    <div class="small text-secondary">Across @ev.Categories.Count categories</div>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(ev.Description))
+        {
+            <div class="mb-2">
+                <h2 class="h5 mb-2">Event Overview</h2>
+                <p class="text-secondary mb-0" style="line-height: 1.7;">@ev.Description</p>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Available Race Categories & Enrolment Section -->
+<div class="rd-card p-4 p-md-5 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="h4 mb-1">Available Race Categories</h2>
+            <p class="text-muted small mb-0">Choose your distance or age category to enrol immediately</p>
+        </div>
+        @if (!isAuthenticated)
+        {
+            <a asp-controller="Account" asp-action="Login"
+               asp-route-returnUrl="@Url.Action("Details", "Events", new { id = ev.EventId })"
+               class="btn btn-sm btn-rd-primary">
+                Sign In to Enrol
+            </a>
+        }
+    </div>
+
+    @if (ev.Categories.Count == 0)
+    {
+        <div class="alert alert-secondary mb-0">
+            Race categories for this event have not been published yet. Please check back soon.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Category Name</th>
+                        <th>Distance</th>
+                        <th>Entry Fee</th>
+                        <th>Enrolled / Capacity</th>
+                        <th class="text-end">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var cat in ev.Categories)
+                    {
+                        var alreadyEnrolled = Model.IsEnrolledInCategory(cat.CategoryId);
+                        var userEnrolment = Model.UserEnrolmentsForEvent.FirstOrDefault(e => e.CategoryId == cat.CategoryId);
+                        <tr>
+                            <td>
+                                <div class="fw-bold">@cat.Name</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-dark">@cat.Distance.ToString("0.##") km</span>
+                            </td>
+                            <td class="fw-bold">
+                                R @cat.EntryFee.ToString("0.00")
+                            </td>
+                            <td>
+                                @if (cat.MaxParticipants.HasValue)
+                                {
+                                    <span>@cat.EnrolledCount / @cat.MaxParticipants</span>
+                                    <span class="text-muted small ms-1">(@cat.SpotsRemaining left)</span>
+                                }
+                                else
+                                {
+                                    <span>@cat.EnrolledCount enrolled (Open capacity)</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                @if (alreadyEnrolled && userEnrolment is not null)
+                                {
+                                    <div class="d-inline-flex align-items-center gap-2">
+                                        <span class="rd-bib">Bib: @userEnrolment.BibNumber</span>
+                                        <partial name="_StatusBadge" model="userEnrolment.Status" />
+                                    </div>
+                                }
+                                else if (ev.Status is "Completed" or "Cancelled")
+                                {
+                                    <span class="text-muted small fw-semibold">Enrolment Closed (@ev.Status)</span>
+                                }
+                                else if (cat.IsFull)
+                                {
+                                    <span class="rd-badge rd-status-withdrawn">Category Full</span>
+                                }
+                                else if (Model.IsParticipant)
+                                {
+                                    <form asp-controller="Events" asp-action="Enrol" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="eventId" value="@ev.EventId" />
+                                        <input type="hidden" name="categoryId" value="@cat.CategoryId" />
+                                        <button type="submit" class="btn btn-sm btn-rd-primary">
+                                            Enrol in @cat.Distance.ToString("0.#") km
+                                        </button>
+                                    </form>
+                                }
+                                else if (!isAuthenticated)
+                                {
+                                    <a asp-controller="Account" asp-action="Login"
+                                       asp-route-returnUrl="@Url.Action("Details", "Events", new { id = ev.EventId })"
+                                       class="btn btn-sm btn-outline-dark">
+                                        Log In to Enrol
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="text-muted small">Participant role required</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Official Event Results Leaderboard -->
+@if (Model.EventResults.Count > 0)
+{
+    <div class="rd-card p-4 p-md-5">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="h4 mb-1">Official Race Results Leaderboard</h2>
+                <p class="text-muted small mb-0">Published finishing positions and times for @ev.Name</p>
+            </div>
+            <span class="rd-badge rd-status-completed">@Model.EventResults.Count Recorded Finishers</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Position</th>
+                        <th>Bib #</th>
+                        <th>Participant</th>
+                        <th>Category</th>
+                        <th>Finish Time</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Model.EventResults)
+                    {
+                        <tr>
+                            <td>
+                                @if (r.Position.HasValue && r.Status == "Finished")
+                                {
+                                    <span class="rd-position-pill">@r.PositionDisplay</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(r.BibNumber))
+                                {
+                                    <span class="rd-bib">@r.BibNumber</span>
+                                }
+                            </td>
+                            <td class="fw-semibold">@r.ParticipantName</td>
+                            <td>@r.CategoryName</td>
+                            <td class="fw-bold font-monospace">
+                                @(r.FinishTime?.ToString("HH:mm:ss") ?? "—")
+                            </td>
+                            <td>
+                                <partial name="_StatusBadge" model="r.Status" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
