@@ -13,9 +13,10 @@ public class CreateCategoryDto
     [Required, Range(0.01, 999.99)]
     public decimal Distance { get; set; }
 
+    [Range(1, 100000)]
     public int? MaxParticipants { get; set; }
 
-    [Range(0, double.MaxValue)]
+    [Range(0, 100000)]
     public decimal EntryFee { get; set; } = 0.00m;
 }
 
@@ -27,5 +28,7 @@ public class CategoryResponseDto
     public decimal Distance { get; set; }
     public int? MaxParticipants { get; set; }
     public decimal EntryFee { get; set; }
+    /// Number of active (non-withdrawn) enrolments in this category.
+    public int EnrolledCount { get; set; }
     public DateTime CreatedAt { get; set; }
 }
