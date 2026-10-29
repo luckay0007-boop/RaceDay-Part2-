@@ -1,0 +1,15 @@
+**/.git
+**/.gitignore
+**/.github
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/out
+**/App_Data
+**/*.user
+**/*.suo
+Dockerfile*
+docker-compose*
+README.md
+
