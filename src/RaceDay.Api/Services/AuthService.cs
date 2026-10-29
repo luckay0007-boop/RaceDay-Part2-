@@ -22,39 +22,44 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponseDto> RegisterAsync(RegisterUserDto dto)
     {
-        // Check if email already exists
-        if (await _db.Users.AnyAsync(u => u.Email == dto.Email))
+        // TODO(security): Integrate HaveIBeenPwned / leaked password detection for registration and password changes.
+        // TODO(security): Consider adding OAuth2/OIDC external identity providers and MFA for enhanced account security.
+        if (string.IsNullOrWhiteSpace(dto.Password) || dto.Password.Length < 8 || dto.Password.Length > 128)
+            throw new ArgumentException("Password must be between 8 and 128 characters.");
+
+        var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+        if (await _db.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail))
             throw new InvalidOperationException("A user with this email address already exists.");
 
-        // Validate role
         var role = await _db.Roles.FirstOrDefaultAsync(r => r.RoleName == dto.Role)
             ?? throw new ArgumentException($"Invalid role '{dto.Role}'. Must be 'Organiser' or 'Participant'.");
 
-        // Hash password using BCrypt
+        var gender = string.IsNullOrWhiteSpace(dto.Gender) ? null : dto.Gender.Trim();
+        if (gender is not null && gender is not ("Male" or "Female" or "Other"))
+            throw new ArgumentException("Gender must be Male, Female, or Other.");
+
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
 
         var user = new User
         {
-            FirstName = dto.FirstName,
-            LastName = dto.LastName,
-            Email = dto.Email,
+            FirstName = dto.FirstName.Trim(),
+            LastName = dto.LastName.Trim(),
+            Email = normalizedEmail,
             PasswordHash = passwordHash,
             DateOfBirth = dto.DateOfBirth,
-            Gender = dto.Gender,
-            PhoneNumber = dto.PhoneNumber,
-            City = dto.City,
-            Province = dto.Province,
+            Gender = gender,
+            PhoneNumber = string.IsNullOrWhiteSpace(dto.PhoneNumber) ? null : dto.PhoneNumber.Trim(),
+            City = string.IsNullOrWhiteSpace(dto.City) ? null : dto.City.Trim(),
+            Province = string.IsNullOrWhiteSpace(dto.Province) ? null : dto.Province.Trim(),
             CreatedAt = DateTime.UtcNow
         };
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        // Assign role
         _db.UserRoles.Add(new UserRole { UserId = user.UserId, RoleId = role.RoleId });
         await _db.SaveChangesAsync();
 
-        // Generate JWT
         var token = GenerateJwtToken(user, role.RoleName);
 
         return new AuthResponseDto
@@ -63,19 +68,20 @@ public class AuthService : IAuthService
             Email = user.Email,
             FullName = $"{user.FirstName} {user.LastName}",
             Role = role.RoleName,
+            ProfilePictureUrl = user.ProfilePictureUrl,
             Token = token
         };
     }
 
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
     {
+        var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
         var user = await _db.Users
             .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
-            .FirstOrDefaultAsync(u => u.Email == dto.Email)
+            .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail)
             ?? throw new UnauthorizedAccessException("Invalid email or password.");
 
-        // Verify password
         if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
             throw new UnauthorizedAccessException("Invalid email or password.");
 
@@ -88,6 +94,7 @@ public class AuthService : IAuthService
             Email = user.Email,
             FullName = $"{user.FirstName} {user.LastName}",
             Role = roleName,
+            ProfilePictureUrl = user.ProfilePictureUrl,
             Token = token
         };
     }
@@ -95,7 +102,8 @@ public class AuthService : IAuthService
     private string GenerateJwtToken(User user, string role)
     {
         var jwtSettings = _config.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"]
+        var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET_KEY")
+            ?? jwtSettings["SecretKey"]
             ?? throw new InvalidOperationException("JWT SecretKey is not configured.");
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
