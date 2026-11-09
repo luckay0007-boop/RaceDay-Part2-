@@ -16,6 +16,10 @@ public partial class MediaController : ControllerBase
         [".webp"] = "image/webp"
     };
 
+    private readonly IWebHostEnvironment _env;
+
+    public MediaController(IWebHostEnvironment env) => _env = env;
+
     [GeneratedRegex(@"^[a-f0-9]{32}\.(jpg|jpeg|png|webp)$", RegexOptions.IgnoreCase)]
     private static partial Regex SafeFileNameRegex();
 
@@ -31,7 +35,7 @@ public partial class MediaController : ControllerBase
         if (!SafeFileNameRegex().IsMatch(cleanFile))
             return NotFound();
 
-        var rootDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "App_Data", "blob-fallback", folder));
+        var rootDir = Path.GetFullPath(Path.Combine(_env.ContentRootPath, "App_Data", "blob-fallback", folder));
         var fullPath = Path.GetFullPath(Path.Combine(rootDir, cleanFile));
         if (!fullPath.StartsWith(rootDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             return NotFound();

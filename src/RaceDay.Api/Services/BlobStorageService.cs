@@ -35,13 +35,14 @@ public class BlobStorageService : IBlobStorageService
         BlobServiceClient serviceClient,
         IConfiguration config,
         IHttpContextAccessor httpContextAccessor,
+        IWebHostEnvironment env,
         ILogger<BlobStorageService> logger)
     {
         var containerName = config["AzureStorage:ContainerName"] ?? "raceday-images";
         _container = serviceClient.GetBlobContainerClient(containerName);
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
-        _localFallbackRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "App_Data", "blob-fallback"));
+        _localFallbackRoot = Path.GetFullPath(Path.Combine(env.ContentRootPath, "App_Data", "blob-fallback"));
     }
 
     public async Task<string> UploadImageAsync(IFormFile file, string folder, CancellationToken ct = default)

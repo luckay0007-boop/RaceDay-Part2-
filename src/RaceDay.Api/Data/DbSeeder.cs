@@ -29,15 +29,28 @@ public static class DbSeeder
                     ALTER TABLE dbo.Users ADD ProfilePictureUrl nvarchar(500) NULL;
                 END;
 
-                IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_Enrolments_Status')
+                IF NOT EXISTS (
+                    SELECT 1 FROM sys.check_constraints
+                    WHERE name = 'CK_Enrolments_Status' AND definition LIKE '%Pending%'
+                )
                 BEGIN
-                    ALTER TABLE dbo.Enrolments DROP CONSTRAINT CK_Enrolments_Status;
+                    IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_Enrolments_Status')
+                    BEGIN
+                        ALTER TABLE dbo.Enrolments DROP CONSTRAINT CK_Enrolments_Status;
+                    END;
+                    ALTER TABLE dbo.Enrolments WITH NOCHECK
+                        ADD CONSTRAINT CK_Enrolments_Status CHECK (Status IN ('Pending', 'Registered', 'Confirmed', 'Withdrawn', 'DNS'));
                 END;
-                ALTER TABLE dbo.Enrolments WITH NOCHECK
-                    ADD CONSTRAINT CK_Enrolments_Status CHECK (Status IN ('Pending', 'Registered', 'Confirmed', 'Withdrawn', 'DNS'));
                 """;
 
             await db.Database.ExecuteSqlRawAsync(upgradeSql);
+
+            // Fast path: if organiser@raceday.co.za is already seeded and no legacy 0km events remain, return immediately
+            if (await db.Users.AnyAsync(u => u.Email == "organiser@raceday.co.za") &&
+                !await db.Events.AnyAsync(e => e.Distance <= 0))
+            {
+                return;
+            }
 
             // Ensure Roles exist
             if (!await db.Roles.AnyAsync())
@@ -49,8 +62,64 @@ public static class DbSeeder
                     """);
             }
 
-            // Seed demo users and events if none exist
-            if (!await db.Users.AnyAsync())
+            var defaultPasswordHash = BCrypt.Net.BCrypt.HashPassword("RaceDay@2026", workFactor: 10);
+
+            // Upgrade any Part 1 placeholder password hashes ($2a$11$EXAMPLEHASH...) so those accounts also work with RaceDay@2026
+            var placeholderUsers = await db.Users
+                .Where(u => u.PasswordHash.StartsWith("$2a$11$EXAMPLEHASH"))
+                .ToListAsync();
+            if (placeholderUsers.Count > 0)
+            {
+                foreach (var u in placeholderUsers)
+                {
+                    u.PasswordHash = defaultPasswordHash;
+                }
+                await db.SaveChangesAsync();
+            }
+
+            // Repair any Part 1 events that had Distance = 0 after schema upgrade or duplicate rows
+            var existingEvents = await db.Events
+                .Include(e => e.Categories)
+                .ToListAsync();
+
+            var duplicateCapeTown = existingEvents
+                .Where(e => e.Name == "Cape Town Cycle Tour 2027")
+                .OrderByDescending(e => e.Categories.Count)
+                .ThenBy(e => e.EventId)
+                .Skip(1)
+                .ToList();
+
+            if (duplicateCapeTown.Count > 0)
+            {
+                db.Events.RemoveRange(duplicateCapeTown);
+                await db.SaveChangesAsync();
+            }
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var updatedLegacyEvents = false;
+            foreach (var ev in await db.Events.Include(e => e.Categories).ToListAsync())
+            {
+                if (ev.Distance <= 0)
+                {
+                    ev.Distance = ev.Categories.Count > 0
+                        ? ev.Categories.Max(c => c.Distance)
+                        : (ev.EventType == "Cycling" ? 95.00m : ev.EventType == "Walking" ? 10.00m : 21.10m);
+                    updatedLegacyEvents = true;
+                }
+
+                if (ev.Name == "Soweto Marathon 2026" && ev.EventDate < today)
+                {
+                    ev.EventDate = today.AddDays(14);
+                    updatedLegacyEvents = true;
+                }
+            }
+            if (updatedLegacyEvents)
+            {
+                await db.SaveChangesAsync();
+            }
+
+            // Seed Part 3 demo accounts and events if organiser@raceday.co.za is not yet present
+            if (!await db.Users.AnyAsync(u => u.Email == "organiser@raceday.co.za"))
             {
                 var organiserRole = await db.Roles.FirstAsync(r => r.RoleName == "Organiser");
                 var participantRole = await db.Roles.FirstAsync(r => r.RoleName == "Participant");
@@ -60,7 +129,7 @@ public static class DbSeeder
                     FirstName = "Sipho",
                     LastName = "Mokoena",
                     Email = "organiser@raceday.co.za",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("RaceDay@2026"),
+                    PasswordHash = defaultPasswordHash,
                     Gender = "Male",
                     PhoneNumber = "+27 82 555 0101",
                     City = "Cape Town",
@@ -74,7 +143,7 @@ public static class DbSeeder
                     FirstName = "Lerato",
                     LastName = "Ndlovu",
                     Email = "runner@raceday.co.za",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("RaceDay@2026"),
+                    PasswordHash = defaultPasswordHash,
                     Gender = "Female",
                     PhoneNumber = "+27 83 555 0199",
                     City = "Johannesburg",
@@ -88,7 +157,7 @@ public static class DbSeeder
                     FirstName = "Liam",
                     LastName = "van der Merwe",
                     Email = "liam@raceday.co.za",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("RaceDay@2026"),
+                    PasswordHash = defaultPasswordHash,
                     Gender = "Male",
                     PhoneNumber = "+27 84 555 0244",
                     City = "Durban",
@@ -102,7 +171,7 @@ public static class DbSeeder
                     FirstName = "Amahle",
                     LastName = "Dlamini",
                     Email = "amahle@raceday.co.za",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("RaceDay@2026"),
+                    PasswordHash = defaultPasswordHash,
                     Gender = "Female",
                     PhoneNumber = "+27 72 555 0311",
                     City = "Pretoria",
@@ -121,8 +190,6 @@ public static class DbSeeder
                     new UserRole { UserId = participant3.UserId, RoleId = participantRole.RoleId }
                 );
                 await db.SaveChangesAsync();
-
-                var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
                 var ev1 = new Event
                 {
@@ -324,4 +391,3 @@ public static class DbSeeder
         }
     }
 }
-

@@ -165,17 +165,25 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+// Start schema initialisation & seeding in the background so Kestrel binds port 52070 immediately,
+// while ensuring any incoming HTTP request awaits completion before hitting controllers.
+var dbInitTask = Task.Run(async () =>
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<RaceDayDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    await DbSeeder.InitialiseAndSeedAsync(db, logger);
+});
+
+app.Use(async (context, next) =>
+{
+    await dbInitTask;
+    await next();
+});
+
 app.UseCors("RaceDayWeb");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-
-// Initialise schema and seed sample data on startup
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<RaceDayDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    await DbSeeder.InitialiseAndSeedAsync(db, logger);
-}
 
 app.Run();
