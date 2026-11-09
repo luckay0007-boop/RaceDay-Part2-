@@ -19,15 +19,18 @@ public class RaceDayApiClient : IRaceDayApiClient
 
     private readonly HttpClient _http;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly LocalApiCompanion _companion;
     private readonly ILogger<RaceDayApiClient> _logger;
 
     public RaceDayApiClient(
         HttpClient http,
         IHttpContextAccessor httpContextAccessor,
+        LocalApiCompanion companion,
         ILogger<RaceDayApiClient> logger)
     {
         _http = http;
         _httpContextAccessor = httpContextAccessor;
+        _companion = companion;
         _logger = logger;
     }
 
@@ -185,21 +188,25 @@ public class RaceDayApiClient : IRaceDayApiClient
 
     private async Task<ApiResult<T>> GetAsync<T>(string relativeUrl, CancellationToken ct)
     {
-        using var req = CreateAuthorizedRequest(HttpMethod.Get, relativeUrl);
-        return await ExecuteAsync<T>(req, ct);
+        return await ExecuteWithRetryAsync<T>(() => CreateAuthorizedRequest(HttpMethod.Get, relativeUrl), ct);
     }
 
     private async Task<ApiResult<T>> SendJsonAsync<T>(HttpMethod method, string relativeUrl, object payload, CancellationToken ct)
     {
-        using var req = CreateAuthorizedRequest(method, relativeUrl);
-        req.Content = JsonContent.Create(payload);
-        return await ExecuteAsync<T>(req, ct);
+        return await ExecuteWithRetryAsync<T>(() =>
+        {
+            var req = CreateAuthorizedRequest(method, relativeUrl);
+            req.Content = JsonContent.Create(payload);
+            return req;
+        }, ct);
     }
 
     private async Task<ApiResult<T>> UploadFileAsync<T>(string relativeUrl, IFormFile file, CancellationToken ct)
     {
         if (file is null || file.Length == 0)
             return ApiResult<T>.Fail("Please select a valid image file to upload.");
+
+        await _companion.EnsureApiRunningAsync(ct);
 
         using var req = CreateAuthorizedRequest(HttpMethod.Post, relativeUrl);
         using var content = new MultipartFormDataContent();
@@ -218,21 +225,34 @@ public class RaceDayApiClient : IRaceDayApiClient
 
     private async Task<ApiResult<bool>> DeleteAsync(string relativeUrl, CancellationToken ct)
     {
-        using var req = CreateAuthorizedRequest(HttpMethod.Delete, relativeUrl);
-        try
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            using var res = await _http.SendAsync(req, ct);
-            if (res.IsSuccessStatusCode)
-                return ApiResult<bool>.Ok(true, (int)res.StatusCode);
+            using var req = CreateAuthorizedRequest(HttpMethod.Delete, relativeUrl);
+            try
+            {
+                using var res = await _http.SendAsync(req, ct);
+                if (res.IsSuccessStatusCode)
+                    return ApiResult<bool>.Ok(true, (int)res.StatusCode);
 
-            var err = await ExtractErrorMessageAsync(res, ct);
-            return ApiResult<bool>.Fail(err, (int)res.StatusCode);
+                var err = await ExtractErrorMessageAsync(res, ct);
+                return ApiResult<bool>.Fail(err, (int)res.StatusCode);
+            }
+            catch (HttpRequestException ex) when (attempt == 0)
+            {
+                if (!await _companion.EnsureApiRunningAsync(ct))
+                {
+                    _logger.LogWarning(ex, "API DELETE request failed for {Url}", relativeUrl);
+                    return ApiResult<bool>.Fail("Unable to reach the RaceDay API server. Please ensure the API is running.", 503);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "API DELETE request failed for {Url}", relativeUrl);
+                return ApiResult<bool>.Fail("Unable to reach the RaceDay API server. Please ensure the API is running.", 503);
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "API DELETE request failed for {Url}", relativeUrl);
-            return ApiResult<bool>.Fail("Unable to reach the RaceDay API server. Please ensure the API is running.", 503);
-        }
+
+        return ApiResult<bool>.Fail("Unable to reach the RaceDay API server. Please ensure the API is running.", 503);
     }
 
     private HttpRequestMessage CreateAuthorizedRequest(HttpMethod method, string relativeUrl)
@@ -244,6 +264,43 @@ public class RaceDayApiClient : IRaceDayApiClient
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
         return req;
+    }
+
+    private async Task<ApiResult<T>> ExecuteWithRetryAsync<T>(Func<HttpRequestMessage> requestFactory, CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var request = requestFactory();
+            try
+            {
+                using var response = await _http.SendAsync(request, ct);
+                if (response.IsSuccessStatusCode)
+                {
+                    var data = await response.Content.ReadFromJsonAsync<T>(JsonOptions, ct);
+                    return data is not null
+                        ? ApiResult<T>.Ok(data, (int)response.StatusCode)
+                        : ApiResult<T>.Fail("Received an empty response from the server.", (int)response.StatusCode);
+                }
+
+                var error = await ExtractErrorMessageAsync(response, ct);
+                return ApiResult<T>.Fail(error, (int)response.StatusCode);
+            }
+            catch (HttpRequestException ex) when (attempt == 0)
+            {
+                if (!await _companion.EnsureApiRunningAsync(ct))
+                {
+                    _logger.LogWarning(ex, "API request failed for {Method} {Uri}", request.Method, request.RequestUri);
+                    return ApiResult<T>.Fail("Unable to connect to the RaceDay API service. Please verify the API is running and try again.", 503);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "API request failed for {Method} {Uri}", request.Method, request.RequestUri);
+                return ApiResult<T>.Fail("Unable to connect to the RaceDay API service. Please verify the API is running and try again.", 503);
+            }
+        }
+
+        return ApiResult<T>.Fail("Unable to connect to the RaceDay API service. Please verify the API is running and try again.", 503);
     }
 
     private async Task<ApiResult<T>> ExecuteAsync<T>(HttpRequestMessage request, CancellationToken ct)

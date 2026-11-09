@@ -34,10 +34,17 @@ var apiBaseUrl = Environment.GetEnvironmentVariable("API_BASE_URL")
     ?? builder.Configuration["ApiSettings:BaseUrl"]
     ?? "http://localhost:52070";
 
+builder.Services.AddSingleton<LocalApiCompanion>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<LocalApiCompanion>());
+
 builder.Services.AddHttpClient<IRaceDayApiClient, RaceDayApiClient>(client =>
 {
     client.BaseAddress = new Uri(apiBaseUrl.TrimEnd('/') + "/");
-    client.Timeout = TimeSpan.FromSeconds(20);
+    client.Timeout = TimeSpan.FromSeconds(25);
+})
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    UseProxy = false
 });
 
 var app = builder.Build();
@@ -61,9 +68,10 @@ app.Use(async (context, next) =>
     context.Response.Headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
     context.Response.Headers["Content-Security-Policy"] =
         "default-src 'self'; " +
-        "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com; " +
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; " +
         "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; " +
         "script-src 'self' https://cdn.jsdelivr.net; " +
+        "connect-src 'self' http://localhost:* https://localhost:* ws://localhost:* wss://localhost:*; " +
         "img-src 'self' data: http: https:; " +
         "frame-ancestors 'self'; " +
         "object-src 'none';";
