@@ -26,6 +26,8 @@ The solution (`RaceDay.slnx`) consists of two strictly separated projects under 
 
 ## Key Features (Part 3)
 
+youtube video:https://youtu.be/1c6dtrQWZak?si=IDnyg7vTM_SNgt_-
+
 ### Authentication & Role-Based Navigation
 - Register and log in as either an **Organiser** or **Participant** through the MVC interface (`/Account/Register`, `/Account/Login`).
 - Distinct role-aware navigation bars and sub-navigation menus for Organisers and Participants.
