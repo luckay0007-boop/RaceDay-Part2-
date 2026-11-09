@@ -1,0 +1,40 @@
+@{
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+}
+<div class="rd-subnav shadow-sm">
+    <div class="container">
+        <ul class="nav">
+            <li class="nav-item">
+                <a class="nav-link @(currentAction == "Dashboard" ? "active" : "")"
+                   asp-controller="Organiser" asp-action="Dashboard">
+                    Overview Dashboard
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(currentAction is "Events" or "CreateEvent" or "EditEvent" ? "active" : "")"
+                   asp-controller="Organiser" asp-action="Events">
+                    Events Management
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(currentAction == "Categories" ? "active" : "")"
+                   asp-controller="Organiser" asp-action="Categories">
+                    Category Setup
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(currentAction == "Enrolments" ? "active" : "")"
+                   asp-controller="Organiser" asp-action="Enrolments">
+                    Participant Enrolments
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link @(currentAction == "Results" ? "active" : "")"
+                   asp-controller="Organiser" asp-action="Results">
+                    Results &amp; Timing
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>
+

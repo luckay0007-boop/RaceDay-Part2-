@@ -1,0 +1,155 @@
+@model ResultsEntryViewModel
+@{
+    ViewData["Title"] = "Results Entry & Publishing";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-1">Results Entry &amp; Publishing</h1>
+        <p class="text-muted small mb-0">Capture and publish official finish times and finishing positions for enrolled Participants</p>
+    </div>
+
+    @if (Model.OrganiserEvents.Count > 0)
+    {
+        <form asp-action="Results" method="get" class="d-flex align-items-center gap-2">
+            <label for="resultsEventSelect" class="small fw-bold text-uppercase text-muted text-nowrap">Event:</label>
+            <select id="resultsEventSelect" name="eventId" class="form-select" data-rd-autosubmit="true">
+                @foreach (var ev in Model.OrganiserEvents)
+                {
+                    <option value="@ev.EventId" selected="@(Model.SelectedEvent?.EventId == ev.EventId)">
+                        @ev.Name (@ev.EventDate.ToString("dd MMM yyyy") — @ev.Status)
+                    </option>
+                }
+            </select>
+        </form>
+    }
+</div>
+
+@if (Model.SelectedEvent is null)
+{
+    <div class="rd-card p-5 text-center">
+        <h2 class="h5 mb-2">No Events Available</h2>
+        <p class="text-muted small mb-3">Create an event and enrol participants before recording race results.</p>
+        <a asp-action="CreateEvent" class="btn btn-rd-primary">+ Create Event</a>
+    </div>
+}
+else
+{
+    <div class="rd-card p-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 pb-3 border-bottom">
+            <div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <h2 class="h4 mb-0">@Model.SelectedEvent.Name</h2>
+                    <partial name="_StatusBadge" model="Model.SelectedEvent.Status" />
+                </div>
+                <div class="small text-muted">
+                    @Model.SelectedEvent.EventDate.ToString("dd MMM yyyy") &bull;
+                    @Model.Rows.Count(r => r.HasRecordedResult) of @Model.Rows.Count results captured
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                <a asp-controller="Events" asp-action="Details" asp-route-id="@Model.SelectedEvent.EventId" class="btn btn-sm btn-outline-dark">
+                    View Public Leaderboard
+                </a>
+                @if (Model.SelectedEvent.Status != "Completed")
+                {
+                    <form asp-action="PublishEventResults" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="eventId" value="@Model.SelectedEvent.EventId" />
+                        <button type="submit" class="btn btn-sm btn-rd-primary">
+                            Mark Event Completed &amp; Publish All Results
+                        </button>
+                    </form>
+                }
+            </div>
+        </div>
+
+        @if (Model.Rows.Count == 0)
+        {
+            <div class="text-center py-4 text-muted">
+                No active participants are enrolled in this event yet.
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Bib #</th>
+                            <th>Participant &amp; Category</th>
+                            <th>Race Outcome</th>
+                            <th>Finish Time (HH:mm:ss)</th>
+                            <th>Finishing Position</th>
+                            <th>State</th>
+                            <th class="text-end">Capture / Publish</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.Rows)
+                        {
+                            var formId = $"resultForm_{row.EnrolmentId}";
+                            <tr>
+                                <td>
+                                    <span class="rd-bib">@(row.BibNumber ?? "—")</span>
+                                </td>
+                                <td>
+                                    <div class="fw-bold">@row.ParticipantName</div>
+                                    <div class="small text-muted">@row.CategoryName (@row.CategoryDistance.ToString("0.##") km)</div>
+                                </td>
+                                <td>
+                                    <select name="Status" form="@formId" class="form-select form-select-sm" style="width: 125px;">
+                                        <option value="Finished" selected="@(row.ResultStatus == "Finished")">Finished</option>
+                                        <option value="DNF" selected="@(row.ResultStatus == "DNF")">DNF</option>
+                                        <option value="DSQ" selected="@(row.ResultStatus == "DSQ")">DSQ</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text"
+                                           name="FinishTime"
+                                           form="@formId"
+                                           value="@(row.FinishTimeText ?? "01:30:00")"
+                                           class="form-control form-control-sm font-monospace"
+                                           style="width: 130px;"
+                                           placeholder="HH:mm:ss" />
+                                </td>
+                                <td>
+                                    <input type="number"
+                                           name="Position"
+                                           form="@formId"
+                                           value="@row.Position"
+                                           min="1"
+                                           class="form-control form-control-sm"
+                                           style="width: 95px;"
+                                           placeholder="e.g. 1" />
+                                </td>
+                                <td>
+                                    @if (row.HasRecordedResult)
+                                    {
+                                        <span class="rd-badge rd-status-confirmed">Published</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="rd-badge rd-status-pending">Awaiting Entry</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <form id="@formId" asp-action="SaveResult" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="EventId" value="@Model.SelectedEvent.EventId" />
+                                        <input type="hidden" name="EnrolmentId" value="@row.EnrolmentId" />
+                                        <button type="submit" class="btn btn-sm @(row.HasRecordedResult ? "btn-outline-dark" : "btn-rd-primary")">
+                                            @(row.HasRecordedResult ? "Update Result" : "Save & Publish")
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+

@@ -1,0 +1,149 @@
+@model ProfileViewModel
+@{
+    ViewData["Title"] = "My Profile";
+    var initials = string.Concat(
+        !string.IsNullOrWhiteSpace(Model.FirstName) ? Model.FirstName[..1] : "R",
+        !string.IsNullOrWhiteSpace(Model.LastName) ? Model.LastName[..1] : "D").ToUpperInvariant();
+    var provinces = new[]
+    {
+        "Eastern Cape", "Free State", "Gauteng", "KwaZulu-Natal",
+        "Limpopo", "Mpumalanga", "Northern Cape", "North West", "Western Cape"
+    };
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <span class="rd-hero-kicker mb-1">Account &amp; Cloud Media Settings</span>
+        <h1 class="h2 mb-1">My Profile</h1>
+        <p class="text-muted small mb-0">View and update your personal details and upload your Profile Picture to Azure Blob Storage</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: Profile Picture Upload (Azure Blob Storage via API) -->
+    <div class="col-lg-4">
+        <div class="rd-card p-4 text-center h-100">
+            <div class="mb-3">
+                @if (!string.IsNullOrWhiteSpace(Model.ProfilePictureUrl))
+                {
+                    <img src="@Model.ProfilePictureUrl" alt="@Model.FirstName @Model.LastName profile picture" class="rd-avatar-lg" />
+                }
+                else
+                {
+                    <div class="rd-avatar-placeholder">@initials</div>
+                }
+            </div>
+
+            <h2 class="h4 mb-1">@Model.FirstName @Model.LastName</h2>
+            <p class="text-muted small mb-2">@PiiMasker.MaskEmail(Model.Email)</p>
+            <div class="mb-4">
+                <span class="rd-role-pill @(Model.Role == "Organiser" ? "rd-role-organiser" : "rd-role-participant")">
+                    @Model.Role Account
+                </span>
+            </div>
+
+            <hr />
+
+            <form asp-action="UploadPicture" method="post" enctype="multipart/form-data" class="text-start">
+                @Html.AntiForgeryToken()
+                <label for="pictureFile" class="form-label small fw-bold text-uppercase text-muted">
+                    Upload Profile Picture
+                </label>
+                <input type="file" id="pictureFile" name="pictureFile" accept=".jpg,.jpeg,.png,.webp" class="form-control form-control-sm mb-2" required />
+                <div class="form-text small mb-3">
+                    JPG, PNG, or WEBP up to 5 MB. Stored in Azure Blob Storage via the Part 2 API.
+                </div>
+                <button type="submit" class="btn btn-rd-primary btn-sm w-100">
+                    Upload New Profile Picture
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Right Column: Personal Information Form -->
+    <div class="col-lg-8">
+        <div class="rd-card p-4 p-md-5 h-100">
+            <h2 class="h4 mb-1">Personal Information</h2>
+            <p class="text-muted small mb-4">Keep your athlete or organiser contact details up to date for race day notifications</p>
+
+            <form asp-action="Update" method="post" novalidate>
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="UserId" />
+                <input type="hidden" asp-for="Email" />
+                <input type="hidden" asp-for="Role" />
+                <input type="hidden" asp-for="ProfilePictureUrl" />
+
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small" role="alert"></div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label asp-for="FirstName" class="form-label fw-semibold"></label>
+                        <input asp-for="FirstName" class="form-control" />
+                        <span asp-validation-for="FirstName" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="LastName" class="form-label fw-semibold"></label>
+                        <input asp-for="LastName" class="form-control" />
+                        <span asp-validation-for="LastName" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Registered Email (Protected)</label>
+                        <input type="text" class="form-control bg-light" value="@PiiMasker.MaskEmail(Model.Email)" readonly disabled />
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="PhoneNumber" class="form-label fw-semibold"></label>
+                        <input asp-for="PhoneNumber" class="form-control" placeholder="+27 82 000 0000" />
+                        <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label asp-for="DateOfBirth" class="form-label fw-semibold"></label>
+                        <input asp-for="DateOfBirth" type="date" class="form-control" value="@(Model.DateOfBirth?.ToString("yyyy-MM-dd"))" />
+                        <span asp-validation-for="DateOfBirth" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Gender" class="form-label fw-semibold"></label>
+                        <select asp-for="Gender" class="form-select">
+                            <option value="">Not specified</option>
+                            <option value="Female">Female</option>
+                            <option value="Male">Male</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <span asp-validation-for="Gender" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label asp-for="City" class="form-label fw-semibold"></label>
+                        <input asp-for="City" class="form-control" placeholder="Johannesburg" />
+                        <span asp-validation-for="City" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Province" class="form-label fw-semibold"></label>
+                        <select asp-for="Province" class="form-select">
+                            <option value="">Select Province</option>
+                            @foreach (var prov in provinces)
+                            {
+                                <option value="@prov">@prov</option>
+                            }
+                        </select>
+                        <span asp-validation-for="Province" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end pt-3 border-top">
+                    <button type="submit" class="btn btn-rd-primary">
+                        Save Personal Information
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,30 @@
+@{
+    ViewData["Title"] = "Access Restricted";
+    var isOrganiser = Context.Session.IsOrganiser();
+}
+
+<div class="row justify-content-center py-5">
+    <div class="col-md-7">
+        <div class="rd-card p-5 text-center">
+            <span class="rd-badge rd-status-withdrawn mb-3">Role-Protected Area</span>
+            <h1 class="h2 mb-2">Access Restricted</h1>
+            <p class="text-secondary mb-4">
+                Your current role (<strong>@Context.Session.GetRole()</strong>) does not have permission to view this page.
+                Organiser and Participant interfaces are strictly separated.
+            </p>
+            @if (isOrganiser)
+            {
+                <a asp-controller="Organiser" asp-action="Dashboard" class="btn btn-rd-primary">
+                    Return to Organiser Dashboard
+                </a>
+            }
+            else
+            {
+                <a asp-controller="Events" asp-action="Index" class="btn btn-rd-primary">
+                    Return to Upcoming Events
+                </a>
+            }
+        </div>
+    </div>
+</div>
+

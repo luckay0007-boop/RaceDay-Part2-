@@ -1,0 +1,177 @@
+@model OrganiserDashboardViewModel
+@{
+    ViewData["Title"] = "Organiser Dashboard";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <span class="rd-hero-kicker mb-1">Race Director Command Centre</span>
+        <h1 class="h2 mb-1">Organiser Dashboard — @Model.OrganiserName</h1>
+        <p class="text-muted small mb-0">Summary of all events you have created, total enrolments per event, and upcoming race schedule</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-action="CreateEvent" class="btn btn-rd-primary">
+            + Create New Event
+        </a>
+        <a asp-action="Events" class="btn btn-outline-dark">
+            Manage All Events
+        </a>
+    </div>
+</div>
+
+<!-- KPI Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+        <div class="rd-stat-card h-100">
+            <div class="rd-stat-label">Total Events Created</div>
+            <div class="rd-stat-value">@Model.TotalEvents</div>
+            <div class="small text-muted mt-1">All statuses</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="rd-stat-card h-100" style="border-left-color: #16A34A;">
+            <div class="rd-stat-label">Total Enrolments</div>
+            <div class="rd-stat-value">@Model.TotalEnrolments</div>
+            <div class="small text-muted mt-1">Active participants enrolled</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="rd-stat-card h-100" style="border-left-color: #0284C7;">
+            <div class="rd-stat-label">Upcoming Events</div>
+            <div class="rd-stat-value">@Model.UpcomingEventsCount</div>
+            <div class="small text-muted mt-1">Scheduled from today onwards</div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="rd-stat-card h-100" style="border-left-color: #6366F1;">
+            <div class="rd-stat-label">Completed Events</div>
+            <div class="rd-stat-value">@Model.CompletedEventsCount</div>
+            <div class="small text-muted mt-1">Official results published</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: All Organiser Events & Total Enrolments Per Event -->
+    <div class="col-lg-8">
+        <div class="rd-card p-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h2 class="h4 mb-0">Your Events &amp; Enrolment Totals</h2>
+                    <p class="text-muted small mb-0">Overview of enrolments and categories per event</p>
+                </div>
+                <a asp-action="Events" class="btn btn-sm btn-outline-secondary">Full Event Manager</a>
+            </div>
+
+            @if (Model.Events.Count == 0)
+            {
+                <div class="text-center py-5">
+                    <h3 class="h5 mb-2">You Haven't Created Any Events Yet</h3>
+                    <p class="text-muted small mb-3">Launch your first running, walking, or cycling event to start accepting participant enrolments.</p>
+                    <a asp-action="CreateEvent" class="btn btn-rd-primary">+ Create Your First Event</a>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Event</th>
+                                <th>Date</th>
+                                <th>Type &amp; Distance</th>
+                                <th>Categories</th>
+                                <th>Total Enrolments</th>
+                                <th>Status</th>
+                                <th class="text-end">Manage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var ev in Model.Events)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">
+                                            <a asp-controller="Events" asp-action="Details" asp-route-id="@ev.EventId" class="text-decoration-none text-dark">
+                                                @ev.Name
+                                            </a>
+                                        </div>
+                                        <div class="small text-muted">@ev.City, @ev.Province</div>
+                                    </td>
+                                    <td class="small fw-semibold">
+                                        @ev.EventDate.ToString("dd MMM yyyy")
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-dark">@ev.EventType &bull; @ev.Distance.ToString("0.#") km</span>
+                                    </td>
+                                    <td>
+                                        <a asp-action="Categories" asp-route-eventId="@ev.EventId" class="text-decoration-none fw-semibold">
+                                            @ev.Categories.Count categories
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <a asp-action="Enrolments" asp-route-eventId="@ev.EventId" class="btn btn-sm btn-light border fw-bold">
+                                            @ev.EnrolmentCount enrolled
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <partial name="_StatusBadge" model="ev.Status" />
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <a asp-action="EditEvent" asp-route-id="@ev.EventId" class="btn btn-outline-dark">Edit</a>
+                                            <a asp-action="Results" asp-route-eventId="@ev.EventId" class="btn btn-outline-primary">Results</a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Right Column: Upcoming Event Dates Schedule -->
+    <div class="col-lg-4">
+        <div class="rd-card p-4 h-100">
+            <h2 class="h4 mb-1">Upcoming Event Dates</h2>
+            <p class="text-muted small mb-3">Chronological countdown of your scheduled races</p>
+
+            @if (Model.UpcomingEvents.Count == 0)
+            {
+                <div class="alert alert-light border small mb-0">
+                    No upcoming events scheduled. Create a new event to add it to your calendar.
+                </div>
+            }
+            else
+            {
+                <div class="d-flex flex-column gap-3">
+                    @foreach (var up in Model.UpcomingEvents)
+                    {
+                        var daysAway = up.EventDate.DayNumber - DateOnly.FromDateTime(DateTime.UtcNow).DayNumber;
+                        <div class="p-3 rounded-3 border bg-light">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-bold text-uppercase small" style="color: var(--rd-primary);">
+                                    @up.EventDate.ToString("ddd, dd MMM yyyy") &bull; @up.StartTime.ToString("HH:mm")
+                                </span>
+                                <span class="badge bg-dark">
+                                    @(daysAway == 0 ? "Today!" : $"In {daysAway} days")
+                                </span>
+                            </div>
+                            <div class="fw-bold mb-1">@up.Name</div>
+                            <div class="small text-muted mb-2">@up.Location, @up.City</div>
+                            <div class="d-flex justify-content-between align-items-center small pt-2 border-top">
+                                <span><strong>@up.EnrolmentCount</strong> enrolled</span>
+                                <a asp-action="Enrolments" asp-route-eventId="@up.EventId" class="fw-semibold text-decoration-none" style="color: var(--rd-primary);">
+                                    View Roster &rarr;
+                                </a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,134 @@
+@model List<EventModel>
+@{
+    ViewData["Title"] = "Manage Events";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-1">Events Management</h1>
+        <p class="text-muted small mb-0">Create, edit, upload Azure Blob Storage event banners, and manage your race events</p>
+    </div>
+    <a asp-action="CreateEvent" class="btn btn-rd-primary">
+        + Create New Event
+    </a>
+</div>
+
+<div class="rd-card p-4">
+    @if (Model.Count == 0)
+    {
+        <div class="text-center py-5">
+            <h2 class="h5 mb-2">No Events Created Yet</h2>
+            <p class="text-muted small mb-3">Get started by creating your first race event and uploading a banner image.</p>
+            <a asp-action="CreateEvent" class="btn btn-rd-primary">+ Create Event</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Banner</th>
+                        <th>Event Name &amp; Location</th>
+                        <th>Date &amp; Time</th>
+                        <th>Type</th>
+                        <th>Distance</th>
+                        <th>Categories</th>
+                        <th>Enrolments</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var ev in Model)
+                    {
+                        <tr>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(ev.BannerImageUrl))
+                                {
+                                    <img src="@ev.BannerImageUrl" alt="@ev.Name banner" class="rd-thumb" />
+                                }
+                                else
+                                {
+                                    <div class="rd-thumb d-inline-flex align-items-center justify-content-center bg-dark text-white small fw-bold">
+                                        @ev.EventType[..Math.Min(3, ev.EventType.Length)].ToUpperInvariant()
+                                    </div>
+                                }
+                            </td>
+                            <td>
+                                <div class="fw-bold">
+                                    <a asp-controller="Events" asp-action="Details" asp-route-id="@ev.EventId" class="text-decoration-none text-dark">
+                                        @ev.Name
+                                    </a>
+                                </div>
+                                <div class="small text-muted">@ev.Location &bull; @ev.City, @ev.Province</div>
+                            </td>
+                            <td class="small">
+                                <div class="fw-semibold">@ev.EventDate.ToString("dd MMM yyyy")</div>
+                                <div class="text-muted">@ev.StartTime.ToString("HH:mm")</div>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">@ev.EventType</span>
+                            </td>
+                            <td class="fw-semibold">@ev.Distance.ToString("0.#") km</td>
+                            <td>
+                                <a asp-action="Categories" asp-route-eventId="@ev.EventId" class="btn btn-sm btn-outline-secondary">
+                                    @ev.Categories.Count Categories
+                                </a>
+                            </td>
+                            <td>
+                                <a asp-action="Enrolments" asp-route-eventId="@ev.EventId" class="btn btn-sm btn-outline-dark fw-semibold">
+                                    @ev.EnrolmentCount Enrolled
+                                </a>
+                            </td>
+                            <td>
+                                <partial name="_StatusBadge" model="ev.Status" />
+                            </td>
+                            <td class="text-end">
+                                <div class="d-inline-flex gap-1">
+                                    <a asp-action="EditEvent" asp-route-id="@ev.EventId" class="btn btn-sm btn-outline-dark">
+                                        Edit / Banner
+                                    </a>
+                                    <a asp-action="Results" asp-route-eventId="@ev.EventId" class="btn btn-sm btn-outline-primary">
+                                        Results
+                                    </a>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-danger"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#rdConfirmDeleteModal"
+                                            data-rd-item-name="@ev.Name"
+                                            data-rd-form-action="@Url.Action("DeleteEvent", "Organiser", new { id = ev.EventId })">
+                                        Delete
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Bootstrap Delete Confirmation Modal -->
+<div class="modal fade" id="rdConfirmDeleteModal" tabindex="-1" aria-labelledby="rdConfirmDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="rdConfirmDeleteLabel">Confirm Event Deletion</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Are you sure you want to permanently delete <strong data-rd-modal-item-name>this event</strong> and its associated categories?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form asp-action="DeleteEvent" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-danger">Delete Event</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
